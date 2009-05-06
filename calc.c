@@ -1,5 +1,13 @@
 #include "anlex.h"
 
+typedef struct {
+    union {
+        long   entero;
+        float  flotante;
+        int    operation;
+    } foo;
+} ePila;
+
 int main(int argc,char* args[])
 {
 	// inicializar analizador lexico
