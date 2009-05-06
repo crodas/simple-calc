@@ -128,27 +128,27 @@ void token_queue_destroy(ar_token * gtoken, int size)
 
 int main(int argc,char* args[])
 {
-	// inicializar analizador lexico
+    // inicializar analizador lexico
     ar_token * pzToken;
-	int complex=0;
+    int complex=0;
     int lastline;
 
     INIT_PZTOKEN(pzToken);
 
-	initTabla();
-	initTablaSimbolos();
-	
-	if(argc > 1)
-	{
-		if (!(archivo=fopen(args[1],"rt")))
-		{
-			printf("Archivo no encontrado.");
-			exit(1);
-		}
-		while (t.compLex!=EOF){
-			sigLex();
+    initTabla();
+    initTablaSimbolos();
+    
+    if(argc > 1)
+    {
+        if (!(archivo=fopen(args[1],"rt")))
+        {
+            printf("Archivo no encontrado.");
+            exit(1);
+        }
+        while (t.compLex!=EOF){
+            sigLex();
             token_queue(pzToken, numLinea, t);
-		}
+        }
 
         /* procesar los datos */
         token_queue_process(pzToken, numLinea);
@@ -156,11 +156,11 @@ int main(int argc,char* args[])
         /* liberar la memoria */
         token_queue_destroy(pzToken, numLinea);
 
-		fclose(archivo);
-	}else{
-		printf("Debe pasar como parametro el path al archivo fuente.");
-		exit(1);
-	}
+        fclose(archivo);
+    }else{
+        printf("Debe pasar como parametro el path al archivo fuente.");
+        exit(1);
+    }
 
-	return 0;
+    return 0;
 }
