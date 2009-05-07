@@ -33,27 +33,6 @@ int numLinea=1;            // Numero de Linea
 
 void sigLex();        // Del analizador Lexico
 
-/*****/
-#ifdef LINUX
-int stricmp(const char * str1, const char * str2)
-{
-    return strcmp(str1, str2);
-    int l1, l2, i;
-    l1 = strlen(str1);
-    l2 = strlen(str2);
-
-    for (i=0; i < l1 && i < l2; i++)
-    {
-        if (tolower(str1[i]) > tolower(str2[i]))
-        {
-            return -1;
-        } else {
-            return 1;
-        }
-    }
-    return 0;
-}
-#endif
 
 /**************** Funciones **********************/
 

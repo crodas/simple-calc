@@ -73,3 +73,10 @@ extern FILE *archivo;
 extern token t;
 extern int numLinea;
 
+/* errores */
+#define OK                      0
+#define ERR_UNEXPECTED_VALUE    1
+#define ERR_UNBALANCED_PAR      2
+#define ERR_UNEXPECTED_NUM      3
+#define ERR_UNEXPECTED_SYM      4
+#define ERR_EXPR                5
