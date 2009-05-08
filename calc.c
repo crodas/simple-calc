@@ -148,7 +148,7 @@ void token_queue_single_process(ar_token * tokline, zval * return_value, int * s
 {
     int i;
     token * tok;
-    int parentesis=0, pred, expected = 0;
+    int parentesis=0, pred, expected = 0, neg = 0;
     stack svalues, sop; 
     zval value;
     
@@ -173,12 +173,23 @@ void token_queue_single_process(ar_token * tokline, zval * return_value, int * s
                 break;
             }
             parse_number(tok->pe->lexema, &value);
+            if (neg == 1) {
+                zval tneg;
+                Z_SET_TYPE(tneg, Z_INT);
+                Z_GET_INT(tneg) = -1;
+                zval_mul(&value, value, tneg);
+                neg = 0;
+            }
             stack_push(&svalues, value);
             expected = 1;
             break;
         case OPMULT:
         case OPSUMA:
             if (expected != 1) {
+                if (tok->pe->lexema[0] == '-') {
+                    neg = 1;
+                    continue;
+                }
                 *status = ERR_UNEXPECTED_SYM;
                 break;
             }
@@ -256,7 +267,6 @@ void token_queue_process(ar_token * gtoken, int size)
     int error;
     for (i=0; i < size-1; i++) {
         error = 0;
-        //printf("processing line %d\n", i);
         token_queue_single_process(&gtoken[i], &valor, &error);
         if (error != OK) {
             printf("Error en la linea %d [%s]\n", i+1, get_error_str(error));

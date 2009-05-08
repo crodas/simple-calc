@@ -1,2 +1,5 @@
 - Alumnos: Cesar Rodriguez y Cesar Rodas
+
 - Detalles
+    - Thread-safe... (excepto el tokenizer)
+    - Tipos de datos dinamicos. (weak typing sino me equivoco).

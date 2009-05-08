@@ -11,6 +11,9 @@ static long strpos(const char * str, char letter) {
 }
 
 
+/**
+ * Simple funcion para simular pow
+ */
 static long long int mpow(long long int a, unsigned int b) {
     long long int c;
     int i;
@@ -22,7 +25,8 @@ static long long int mpow(long long int a, unsigned int b) {
 }
 
 /**
- * 
+ *  Esta funcion recibe un string "number", y lo transforma
+ *  a su similar en zval.
  */
 void parse_number(const char * number, zval * rnumber) {
     int i;
@@ -70,6 +74,9 @@ void var_dump(zval value)
     fflush(stdout);
 }
 
+/**
+ * Resta
+ */
 void zval_sub(zval * result, zval a, zval b) {
     zval out;
     if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
@@ -82,6 +89,9 @@ void zval_sub(zval * result, zval a, zval b) {
     *result = out;
 }
 
+/**
+ * Suma
+ */
 void zval_add(zval * result, zval a, zval b) {
     zval out;
     if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
@@ -95,7 +105,7 @@ void zval_add(zval * result, zval a, zval b) {
 }
 
 /**
- *
+ * Division
  */
 void zval_div(zval * result, zval a, zval b) {
     zval out;
@@ -113,7 +123,7 @@ void zval_div(zval * result, zval a, zval b) {
 }
 
 /**
- *
+ * Multiplicacon
  */
 void zval_mul(zval * result, zval a, zval b) {
     zval out;
