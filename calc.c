@@ -1,97 +1,4 @@
-#include "anlex.h"
-
-
-
-#define TINT    1
-#define TFLOAT  2
-#define TOP     3
-#define TFREE   4
-
-#define GET_MEM(obj, size) obj = malloc(size); if (obj==0) { \
-            printf("malloc fails: %d", __LINE__); \
-            exit(-1); \
-        }
-
-#define MEM_RESIZE(obj, size)  obj = realloc(obj, size);if (obj==0) { \
-            printf("realloc fails: %d", __LINE__); \
-            exit(-1); \
-        }
-
-#define PREBUF_SIZE 3
-
-#define INIT_PZTOKEN(a) GET_MEM(a, sizeof(ar_token) * PREBUF_SIZE); \
-    int tmpi; \
-    for (tmpi=0; tmpi < PREBUF_SIZE; tmpi++) { \
-        a[tmpi].nsize = a[tmpi].ntoken = 0;\
-    }
-
-#define RESIZE_PZTOKEN(a,ini, size) MEM_RESIZE(a, (ini +size) * sizeof(ar_token)); \
-        int tmpi; \
-        for (tmpi=ini; tmpi < ini + size; tmpi++) { \
-            a[tmpi].nsize = a[tmpi].ntoken = 0;\
-        }
-                
-
-/**
- * esta estrutra represanta cualquier numero 
- * posible
- */
-typedef struct {
-    union {
-        long long int   entero;
-        float  flotante;
-        int    operation;
-    } value;
-    int type;
-} zval;
-
-/* wrappers para manipular los zval */
-#define Z_INT                   1
-#define Z_FLOAT                 2
-#define Z_OP                    3
-#define Z_TYPE(zval)            zval.type
-#define Z_SET_TYPE(zval,ztype)  zval.type = ztype 
-
-#define Z_GET_INT(zval)         zval.value.entero
-
-#define Z_GET_FLOAT(zval)       zval.value.flotante
-
-#define Z_TRANS_OP(zval,str)    Z_SET_TYPE(zval, Z_OP); \
-                                Z_GET_OP(zval) = str[0];
-#define Z_GET_OP(zval)          zval.value.operation
-#define Z_GET_NUM               Z_GET_FLOAT
-
-#define Z_VALUE(zval)           (Z_TYPE(zval) == Z_INT ? Z_GET_INT(zval) : Z_GET_FLOAT(zval))
-
-
-
-/**
- *  Esta estructura guarda 
- *  los tokens por cada linea
- */
-typedef struct {
-    int line;
-    token * token;
-    /* numero de tokens */
-    int ntoken;
-    /* tamanho de memoria ya reservado */
-    int nsize;
-} ar_token;
-
-/**
- * Stack
- */
-typedef struct {
-    zval * values;
-    int size;
-    int position;
-} stack;
-#define INIT_STACK(stack, xsize)     stack.size     = xsize; \
-                                     stack.position = -1; \
-                                     GET_MEM(stack.values, sizeof(zval) * (xsize+1));
-
-#define DESTROY_STACK(stack)         free(stack.values)
-#define STACK_NEXT(stack)            stack.position++;
+#include "calc.h"
 
 /* funciona faltantes en Linux */
 #ifdef LINUX
@@ -104,12 +11,6 @@ int stricmp(const char * s1, const char * s2)
 
 }
 #endif
-
-/* backwards */
-void zval_mult(zval * result, zval a, zval b);
-void zval_add(zval * result, zval a, zval b);
-void zval_sub(zval * result, zval a, zval b);
-void zval_div(zval * result, zval a, zval b);
 
 /**
  *  Encolar el token actual, y asignarle la linea a la cual 
@@ -216,7 +117,7 @@ void postfix_exec(stack * svalues, zval * return_value, int * status)
                 zval_div(&result, num1, num2);
                 break;
             case '*':
-                zval_mult(&result, num1, num2);
+                zval_mul(&result, num1, num2);
                 break;
             }
             stack_push(&estack, result);
@@ -237,131 +138,6 @@ void postfix_exec(stack * svalues, zval * return_value, int * status)
     DESTROY_STACK(estack);
 }
 
-static long strpos(const char * str, char letter) {
-    int i;
-    for (i=0; *str ; *str++,i++) {
-       if (*str == letter) {
-           return i;
-       }
-    }
-    return -1;
-}
-
-/**
- * Esta funcion imprime al stdout la variable y su tipo
- */
-void var_dump(zval value)
-{
-    switch(Z_TYPE(value)) {
-    case Z_INT:
-        printf("entero:%d\n", Z_GET_INT(value));
-        break;
-    case Z_FLOAT:
-        printf("flotante:%f\n", Z_GET_FLOAT(value));
-        break;
-    default:
-        printf("invalid header-type: %d", Z_TYPE(value));
-    }
-    fflush(stdout);
-}
-
-void zval_sub(zval * result, zval a, zval b) {
-    zval out;
-    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
-        Z_SET_TYPE(out, Z_FLOAT);
-        Z_GET_FLOAT(out) = Z_VALUE(a) - Z_VALUE(b);
-    } else {
-        Z_SET_TYPE(out, Z_INT);
-        Z_GET_INT(out) = Z_VALUE(a) - Z_VALUE(b);
-    }
-    *result = out;
-}
-
-void zval_add(zval * result, zval a, zval b) {
-    zval out;
-    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
-        Z_SET_TYPE(out, Z_FLOAT);
-        Z_GET_FLOAT(out) = Z_VALUE(a) + Z_VALUE(b);
-    } else {
-        Z_SET_TYPE(out, Z_INT);
-        Z_GET_INT(out) = Z_VALUE(a) + Z_VALUE(b);
-    }
-    *result = out;
-}
-
-/**
- *
- */
-void zval_div(zval * result, zval a, zval b) {
-    zval out;
-    double ta, tb;
-    ta = (double) Z_VALUE(a);
-    tb = (double) Z_VALUE(b);
-    if ( ta/tb == (int)ta/tb) {
-        Z_SET_TYPE(out, Z_FLOAT);
-        Z_GET_FLOAT(out) = Z_VALUE(a) / Z_VALUE(b);
-    } else {
-        Z_SET_TYPE(out, Z_INT);
-        Z_GET_INT(out) = Z_VALUE(a) / Z_VALUE(b);
-    }
-    *result = out;
-}
-
-/**
- *
- */
-void zval_mult(zval * result, zval a, zval b) {
-    zval out;
-    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
-        Z_SET_TYPE(out, Z_FLOAT);
-        Z_GET_FLOAT(out) = Z_VALUE(a) * Z_VALUE(b);
-    } else {
-        Z_SET_TYPE(out, Z_INT);
-        Z_GET_INT(out) = Z_VALUE(a) * Z_VALUE(b);
-    }
-    *result = out;
-}
-
-long long int mpow(long long int a, unsigned int b) {
-    long long int c;
-    int i;
-    c = 1;
-    for (i=0; i < b; i++) {
-        c *= a;
-    }
-    return c;
-}
-
-/**
- * 
- */
-void parse_number(const char * number, zval * rnumber) {
-    int i;
-    zval value;
-    if ((i=strpos(number,'e')) != -1 || (i=strpos(number, 'E')) != -1) {
-        char tmp1[80], tmp2[80];
-        zval ztmp2;
-        long exp;
-        strncpy(tmp1, number,i);
-        strcpy(tmp2, number + i + 1);
-        parse_number(tmp1, &value);
-        parse_number(tmp2, &ztmp2);
-
-
-        Z_GET_INT(ztmp2) = mpow(10, Z_GET_INT(ztmp2) );
-
-        zval_mult(&value, value, ztmp2 );
-    }
-    else if (strpos(number,'.') != -1) {
-        Z_SET_TYPE(value, Z_FLOAT); 
-        Z_GET_FLOAT(value) = atof(number);
-    } else {
-        Z_SET_TYPE(value,Z_INT);
-        Z_GET_INT(value) = atol(number);
-    }
-    *rnumber = value;
-
-}
 
 /**
  * Realiza los procesos por cada linea.
