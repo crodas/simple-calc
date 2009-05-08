@@ -1,5 +1,7 @@
 #include "anlex.h"
 
+
+
 #define TINT    1
 #define TFLOAT  2
 #define TOP     3
@@ -10,11 +12,25 @@
             exit(-1); \
         }
 
-#define INIT_PZTOKEN(a) GET_MEM(a, sizeof(ar_token) * 40); \
+#define MEM_RESIZE(obj, size)  obj = realloc(obj, size);if (obj==0) { \
+            printf("realloc fails: %d", __LINE__); \
+            exit(-1); \
+        }
+
+#define PREBUF_SIZE 3
+
+#define INIT_PZTOKEN(a) GET_MEM(a, sizeof(ar_token) * PREBUF_SIZE); \
     int tmpi; \
-    for (tmpi=0; tmpi < 40; tmpi++) { \
+    for (tmpi=0; tmpi < PREBUF_SIZE; tmpi++) { \
         a[tmpi].nsize = a[tmpi].ntoken = 0;\
     }
+
+#define RESIZE_PZTOKEN(a,ini, size) MEM_RESIZE(a, (ini +size) * sizeof(ar_token)); \
+        int tmpi; \
+        for (tmpi=ini; tmpi < ini + size; tmpi++) { \
+            a[tmpi].nsize = a[tmpi].ntoken = 0;\
+        }
+                
 
 /**
  * esta estrutra represanta cualquier numero 
@@ -22,7 +38,7 @@
  */
 typedef struct {
     union {
-        long   entero;
+        long long int   entero;
         float  flotante;
         int    operation;
     } value;
@@ -35,16 +51,18 @@ typedef struct {
 #define Z_OP                    3
 #define Z_TYPE(zval)            zval.type
 #define Z_SET_TYPE(zval,ztype)  zval.type = ztype 
-#define Z_TRANS_INT(zval,str)   Z_SET_TYPE(zval, Z_INT); \
-                                Z_GET_INT(zval) = atol(str);
+
 #define Z_GET_INT(zval)         zval.value.entero
+
+#define Z_GET_FLOAT(zval)       zval.value.flotante
 
 #define Z_TRANS_OP(zval,str)    Z_SET_TYPE(zval, Z_OP); \
                                 Z_GET_OP(zval) = str[0];
 #define Z_GET_OP(zval)          zval.value.operation
+#define Z_GET_NUM               Z_GET_FLOAT
 
+#define Z_VALUE(zval)           (Z_TYPE(zval) == Z_INT ? Z_GET_INT(zval) : Z_GET_FLOAT(zval))
 
-#define Z_GET_NUM(zval)         Z_GET_INT(zval)
 
 
 /**
@@ -87,6 +105,12 @@ int stricmp(const char * s1, const char * s2)
 }
 #endif
 
+/* backwards */
+void zval_mult(zval * result, zval a, zval b);
+void zval_add(zval * result, zval a, zval b);
+void zval_sub(zval * result, zval a, zval b);
+void zval_div(zval * result, zval a, zval b);
+
 /**
  *  Encolar el token actual, y asignarle la linea a la cual 
  *  pertenece
@@ -100,13 +124,13 @@ void token_queue(ar_token * gtoken, int lineno, token pztoken)
     }
     current = & gtoken[lineno-1];
     if (current->nsize == 0) {
-        GET_MEM(current->token, sizeof(token) * 40);
-        current->nsize  = 40;
+        GET_MEM(current->token, sizeof(token) * PREBUF_SIZE);
+        current->nsize  = PREBUF_SIZE;
     }
 
-    if ((current->ntoken+1)%40 == 0) {
-        printf("out of stack");
-        return;
+    if (current->ntoken+1 == current->nsize) {
+        current->nsize += PREBUF_SIZE;
+        MEM_RESIZE(current->token, current->nsize * sizeof(token));
     }
 
     curTok = & current->token[current->ntoken];
@@ -146,6 +170,9 @@ static int get_precedence(int op) {
     case '*':
         i = 2;
         break;
+    case '(':
+        i = 3;
+        break;
     default:
         i = 0;
     }
@@ -167,29 +194,35 @@ void postfix_exec(stack * svalues, zval * return_value, int * status)
 
     INIT_STACK(estack, svalues->position+1);
 
-    for(i=0; i <= svalues->position; i++) {
+    for (i=0; i <= svalues->position; i++) {
         value = svalues->values[i];
         switch( Z_TYPE(value) ) {
         case Z_OP:
+            switch (Z_GET_OP(value)) {
+            case '(':
+            case ')':
+                continue;
+            }
             num2 = stack_pop(&estack);
             num1 = stack_pop(&estack);
             switch (Z_GET_OP(value)) {
             case '+':
-                Z_GET_NUM(result) = Z_GET_NUM(num1) + Z_GET_NUM(num2);
+                zval_add(&result, num1, num2);
                 break;
             case '-':
-                Z_GET_NUM(result) = Z_GET_NUM(num1) - Z_GET_NUM(num2);
+                zval_sub(&result, num1, num2);
                 break;
             case '/':
-                Z_GET_NUM(result) = Z_GET_NUM(num1) / Z_GET_NUM(num2);
+                zval_div(&result, num1, num2);
                 break;
             case '*':
-                Z_GET_NUM(result) = Z_GET_NUM(num1) * Z_GET_NUM(num2);
+                zval_mult(&result, num1, num2);
                 break;
             }
             stack_push(&estack, result);
             break;
         case Z_INT:
+        case Z_FLOAT:
             stack_push(&estack, value);
             break;
         }
@@ -204,8 +237,136 @@ void postfix_exec(stack * svalues, zval * return_value, int * status)
     DESTROY_STACK(estack);
 }
 
+static long strpos(const char * str, char letter) {
+    int i;
+    for (i=0; *str ; *str++,i++) {
+       if (*str == letter) {
+           return i;
+       }
+    }
+    return -1;
+}
+
+/**
+ * Esta funcion imprime al stdout la variable y su tipo
+ */
+void var_dump(zval value)
+{
+    switch(Z_TYPE(value)) {
+    case Z_INT:
+        printf("entero:%d\n", Z_GET_INT(value));
+        break;
+    case Z_FLOAT:
+        printf("flotante:%f\n", Z_GET_FLOAT(value));
+        break;
+    default:
+        printf("invalid header-type: %d", Z_TYPE(value));
+    }
+    fflush(stdout);
+}
+
+void zval_sub(zval * result, zval a, zval b) {
+    zval out;
+    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
+        Z_SET_TYPE(out, Z_FLOAT);
+        Z_GET_FLOAT(out) = Z_VALUE(a) - Z_VALUE(b);
+    } else {
+        Z_SET_TYPE(out, Z_INT);
+        Z_GET_INT(out) = Z_VALUE(a) - Z_VALUE(b);
+    }
+    *result = out;
+}
+
+void zval_add(zval * result, zval a, zval b) {
+    zval out;
+    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
+        Z_SET_TYPE(out, Z_FLOAT);
+        Z_GET_FLOAT(out) = Z_VALUE(a) + Z_VALUE(b);
+    } else {
+        Z_SET_TYPE(out, Z_INT);
+        Z_GET_INT(out) = Z_VALUE(a) + Z_VALUE(b);
+    }
+    *result = out;
+}
+
+/**
+ *
+ */
+void zval_div(zval * result, zval a, zval b) {
+    zval out;
+    double ta, tb;
+    ta = (double) Z_VALUE(a);
+    tb = (double) Z_VALUE(b);
+    if ( ta/tb == (int)ta/tb) {
+        Z_SET_TYPE(out, Z_FLOAT);
+        Z_GET_FLOAT(out) = Z_VALUE(a) / Z_VALUE(b);
+    } else {
+        Z_SET_TYPE(out, Z_INT);
+        Z_GET_INT(out) = Z_VALUE(a) / Z_VALUE(b);
+    }
+    *result = out;
+}
+
+/**
+ *
+ */
+void zval_mult(zval * result, zval a, zval b) {
+    zval out;
+    if (Z_TYPE(a) == Z_FLOAT || Z_TYPE(b) == Z_FLOAT)  {
+        Z_SET_TYPE(out, Z_FLOAT);
+        Z_GET_FLOAT(out) = Z_VALUE(a) * Z_VALUE(b);
+    } else {
+        Z_SET_TYPE(out, Z_INT);
+        Z_GET_INT(out) = Z_VALUE(a) * Z_VALUE(b);
+    }
+    *result = out;
+}
+
+long long int mpow(long long int a, unsigned int b) {
+    long long int c;
+    int i;
+    c = 1;
+    for (i=0; i < b; i++) {
+        c *= a;
+    }
+    return c;
+}
+
+/**
+ * 
+ */
+void parse_number(const char * number, zval * rnumber) {
+    int i;
+    zval value;
+    if ((i=strpos(number,'e')) != -1 || (i=strpos(number, 'E')) != -1) {
+        char tmp1[80], tmp2[80];
+        zval ztmp2;
+        long exp;
+        strncpy(tmp1, number,i);
+        strcpy(tmp2, number + i + 1);
+        parse_number(tmp1, &value);
+        parse_number(tmp2, &ztmp2);
+
+
+        Z_GET_INT(ztmp2) = mpow(10, Z_GET_INT(ztmp2) );
+
+        zval_mult(&value, value, ztmp2 );
+    }
+    else if (strpos(number,'.') != -1) {
+        Z_SET_TYPE(value, Z_FLOAT); 
+        Z_GET_FLOAT(value) = atof(number);
+    } else {
+        Z_SET_TYPE(value,Z_INT);
+        Z_GET_INT(value) = atol(number);
+    }
+    *rnumber = value;
+
+}
+
 /**
  * Realiza los procesos por cada linea.
+ *
+ * Parentesis no reconce ()
  */
 void token_queue_single_process(ar_token * tokline, zval * return_value, int * status)
 {
@@ -235,7 +396,7 @@ void token_queue_single_process(ar_token * tokline, zval * return_value, int * s
                 *status = ERR_UNEXPECTED_NUM;
                 break;
             }
-            Z_TRANS_INT(value, tok->pe->lexema);
+            parse_number(tok->pe->lexema, &value);
             stack_push(&svalues, value);
             expected = 1;
             break;
@@ -261,12 +422,14 @@ void token_queue_single_process(ar_token * tokline, zval * return_value, int * s
             break;
         }
     }
+    
+    if (expected != 1) {
+         *status = ERR_UNEXPECTED_SYM;
+    }
 
     while (sop.position > -1) {
         stack_push(&svalues, stack_pop(&sop));
     }
-
-
 
     if (parentesis != 0) {
         *status = ERR_UNBALANCED_PAR;
@@ -278,6 +441,33 @@ void token_queue_single_process(ar_token * tokline, zval * return_value, int * s
 
     DESTROY_STACK(svalues);
     DESTROY_STACK(sop);
+}
+
+const char * get_error_str(int errorno) {
+    char * errstr;
+    switch (errorno) {
+    case OK:
+        errstr = "No hay errores";
+        break;
+    case ERR_UNEXPECTED_VALUE:
+        errstr = "No se esperaba el token";
+        break;
+    case ERR_UNBALANCED_PAR:
+        errstr = "Parentesis no balanceados";
+        break;
+    case ERR_UNEXPECTED_NUM:
+        errstr = "No se esperaba un numero";
+        break;
+    case ERR_UNEXPECTED_SYM:
+        errstr = "No se esperaba un simbolo";
+        break;
+    case ERR_EXPR:
+        errstr = "Error, expresion invalida";
+        break;
+    default:
+        errstr = "Error desconocido";
+    }
+    return errstr;
 }
 
 /**
@@ -293,10 +483,15 @@ void token_queue_process(ar_token * gtoken, int size)
         //printf("processing line %d\n", i);
         token_queue_single_process(&gtoken[i], &valor, &error);
         if (error != OK) {
-            printf("Error en la linea %d\n", i);
+            printf("Error en la linea %d [%s]\n", i+1, get_error_str(error));
             continue;
         } else {
-            printf("Línea %d: %d\n", i+1, Z_GET_NUM(valor));
+            if (Z_TYPE(valor) == Z_INT) {
+                printf("Línea %d: %d\n", i+1, Z_GET_INT(valor));
+            } else {
+                printf("Línea %d: %f (float)\n", i+1, Z_GET_FLOAT(valor));
+            }
+            fflush(stdout);
         }
     }
 }
@@ -340,8 +535,10 @@ int main(int argc,char* args[])
         while (t.compLex!=EOF){
             sigLex();
             token_queue(pzToken, numLinea, t);
+            if ( (numLinea) % PREBUF_SIZE == 0) {
+                RESIZE_PZTOKEN(pzToken, numLinea, PREBUF_SIZE);
+            }
         }
-
         /* procesar los datos */
         token_queue_process(pzToken, numLinea);
 

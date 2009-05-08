@@ -1,2 +1,2 @@
 rm calc
-gcc anlex.c calc.c -DLINUX  -o calc
+gcc anlex.c calc.c -DLINUX  -o calc -lm
